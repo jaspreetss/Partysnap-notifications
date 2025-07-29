@@ -1,0 +1,29 @@
+{
+  "name": "partysnap-notifications",
+  "version": "1.0.0",
+  "description": "PartySnap Push Notification Service for Vercel",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel",
+    "test": "node test/test-notifications.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "firebase-admin": "^12.0.0",
+    "node-apn": "^2.2.0",
+    "@vercel/node": "^3.0.21"
+  },
+  "devDependencies": {
+    "vercel": "^33.0.0"
+  },
+  "keywords": [
+    "push-notifications",
+    "vercel",
+    "firebase",
+    "apns",
+    "partysnap"
+  ],
+  "author": "PartySnap Team",
+  "license": "MIT"
+}

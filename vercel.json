@@ -1,0 +1,28 @@
+{
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/process-queue",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/process-webhooks",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-tokens",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/send-reminders",
+      "schedule": "0 * * * *"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
