@@ -109,6 +109,45 @@ async function processWebhookQueue() {
   }
 }
 
+function checkIfEventGoingLive(record, old_record) {
+  // Check common column names that might indicate event status
+  const statusColumns = ['status', 'state', 'is_live', 'active', 'is_active'];
+  
+  for (const column of statusColumns) {
+    if (record.hasOwnProperty(column) && old_record?.hasOwnProperty(column)) {
+      // Check for status change to 'live', 'active', true, etc.
+      const newValue = record[column];
+      const oldValue = old_record[column];
+      
+      if (newValue !== oldValue) {
+        // Check if it's going to a "live" state
+        if (newValue === 'live' || newValue === 'active' || newValue === true) {
+          console.log(`Event going live detected: ${column} changed from ${oldValue} to ${newValue}`);
+          return true;
+        }
+      }
+    }
+  }
+  
+  // Also check if start_time is being updated to current time (event starting now)
+  if (record.start_time && old_record?.start_time) {
+    const newStartTime = new Date(record.start_time);
+    const oldStartTime = new Date(old_record.start_time);
+    const now = new Date();
+    
+    // If start_time changed and new start_time is within 5 minutes of now
+    if (newStartTime.getTime() !== oldStartTime.getTime()) {
+      const timeDiff = Math.abs(now.getTime() - newStartTime.getTime());
+      if (timeDiff < 5 * 60 * 1000) { // 5 minutes
+        console.log(`Event starting now detected: start_time updated to ${record.start_time}`);
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
 async function processWebhookPayload(payload) {
   const { table, type, record, old_record } = payload;
 
@@ -132,8 +171,13 @@ async function processWebhookPayload(payload) {
       break;
 
     case 'events':
-      if (type === 'UPDATE' && record.status === 'live' && old_record?.status !== 'live') {
-        await handleEventLive(record);
+      if (type === 'UPDATE') {
+        // Check if this is an event going live
+        // Since we don't know the exact column name, we'll check for common patterns
+        const isGoingLive = checkIfEventGoingLive(record, old_record);
+        if (isGoingLive) {
+          await handleEventLive(record);
+        }
       }
       break;
 
