@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "PartySnap Push Notification Service for Vercel",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "dev": "vercel dev",
     "deploy": "vercel",
@@ -11,7 +12,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "firebase-admin": "^12.0.0",
-    "node-apn": "^2.2.0",
+    "node-apn": "^3.0.0",
     "@vercel/node": "^3.0.21"
   },
   "devDependencies": {
