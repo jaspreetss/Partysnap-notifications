@@ -1,8 +1,8 @@
 // Complete notification flow test script
 import fetch from 'node-fetch';
 
-const VERCEL_URL = 'https://your-vercel-app.vercel.app'; // Replace with your actual Vercel URL
-const API_SECRET = 'your-api-secret-key'; // Replace with your actual API secret
+const VERCEL_URL = 'https://partysnap-notification.vercel.app';
+const API_SECRET = 'zPlQ+EuXwkeeVl6bFZPLtay2p2u2RxoWY4I05a2766s=';
 
 async function testCompleteFlow() {
   console.log('🧪 Testing complete notification flow...\n');
@@ -150,7 +150,7 @@ async function testWebhookEndpoint() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-webhook-secret': 'your-webhook-secret' // Replace with your webhook secret
+        'x-webhook-secret': 'WtfToppHN4bu6RxEtJ6sFRnr8APTehtvoFUVLGj1Ap4='
       },
       body: JSON.stringify({
         table: 'photo_likes',
