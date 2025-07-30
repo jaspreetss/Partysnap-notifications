@@ -9,6 +9,21 @@ export default async function handler(req, res) {
     const hasServiceKey = !!process.env.SUPABASE_SERVICE_KEY;
     const serviceKeyPrefix = process.env.SUPABASE_SERVICE_KEY?.substring(0, 20) + '...';
     
+    // Check if it's a service role key (should start with 'eyJ' and contain 'service_role' when decoded)
+    let keyType = 'unknown';
+    try {
+      const keyString = process.env.SUPABASE_SERVICE_KEY;
+      if (keyString?.startsWith('eyJ')) {
+        // It's a JWT token
+        const payload = JSON.parse(Buffer.from(keyString.split('.')[1], 'base64').toString());
+        keyType = payload.role || 'no-role-in-jwt';
+      } else {
+        keyType = 'not-jwt';
+      }
+    } catch (e) {
+      keyType = 'decode-error';
+    }
+    
     // Try to query a simple table to check auth
     const { supabase } = await import('../lib/supabase.js');
     
@@ -21,7 +36,7 @@ export default async function handler(req, res) {
     // Test push_tokens table access
     const { data: tokenTest, error: tokenError } = await supabase
       .from('push_tokens')
-      .select('count(*)')
+      .select('id')
       .limit(1);
 
     return res.status(200).json({
@@ -29,6 +44,7 @@ export default async function handler(req, res) {
         hasSupabaseUrl,
         hasServiceKey,
         serviceKeyPrefix,
+        keyType,
         nodeEnv: process.env.NODE_ENV
       },
       auth: {
