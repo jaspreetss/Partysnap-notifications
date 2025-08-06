@@ -29,8 +29,21 @@ import { redisHealthCheck } from '../lib/redis.js';
 import { supabase } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
+  // Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   const { type, eventId } = req.query;
   const startTime = Date.now();
+
+  // Add request logging
+  console.log(`📥 Cache API Request: ${req.method} ${req.url} - Type: ${type}, Event: ${eventId}`);
 
   try {
     // Route to appropriate handler based on type
@@ -43,6 +56,14 @@ export default async function handler(req, res) {
         return await handlePhotoUrlsBatch(req, res, startTime);
       case 'health':
         return await handleHealth(req, res, startTime);
+      case 'test':
+        return res.status(200).json({
+          message: 'Cache API is working',
+          timestamp: new Date().toISOString(),
+          method: req.method,
+          query: req.query,
+          performance: { response_time_ms: Date.now() - startTime }
+        });
       default:
         return res.status(400).json({
           error: 'Invalid type parameter',
@@ -451,12 +472,29 @@ async function handlePhotoUrlsBatch(req, res, startTime) {
 
   console.log(`🔄 Processing batch URL request for ${validPaths.length} photos`);
 
-  const result = await batchGenerateSignedUrls(validPaths, {
-    expiresIn,
-    eventId: event_id,
-    userId: user?.id,
-    forceRefresh: force_refresh
-  });
+  let result;
+  try {
+    result = await batchGenerateSignedUrls(validPaths, {
+      expiresIn,
+      eventId: event_id,
+      userId: user?.id,
+      forceRefresh: force_refresh
+    });
+  } catch (batchError) {
+    console.error('Batch URL generation failed:', batchError);
+    
+    const responseTime = Date.now() - startTime;
+    return res.status(500).json({
+      error: 'Batch URL generation failed',
+      code: 'BATCH_GENERATION_ERROR',
+      details: batchError.message,
+      photo_count: validPaths.length,
+      performance: {
+        response_time_ms: responseTime,
+        failed: true
+      }
+    });
+  }
 
   const responseTime = Date.now() - startTime;
 
