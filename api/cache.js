@@ -25,6 +25,14 @@ import {
   checkPhotoUrlRateLimit
 } from '../lib/photo-url-cache.js';
 
+import {
+  getEventAlbums,
+  getAlbumById,
+  updateAlbum,
+  deleteAlbum,
+  checkAlbumRateLimit
+} from '../lib/album-cache.js';
+
 import { redisHealthCheck } from '../lib/redis.js';
 import { supabase } from '../lib/supabase.js';
 
@@ -54,6 +62,10 @@ export default async function handler(req, res) {
         return await handlePhotoUrls(req, res, eventId, startTime);
       case 'photo-urls-batch':
         return await handlePhotoUrlsBatch(req, res, startTime);
+      case 'albums':
+        return await handleAlbums(req, res, eventId, startTime);
+      case 'album-by-id':
+        return await handleAlbumById(req, res, startTime);
       case 'health':
         return await handleHealth(req, res, startTime);
       case 'test':
@@ -68,7 +80,7 @@ export default async function handler(req, res) {
         return res.status(400).json({
           error: 'Invalid type parameter',
           code: 'INVALID_TYPE',
-          allowed_types: ['participants', 'photo-urls', 'photo-urls-batch', 'health'],
+          allowed_types: ['participants', 'photo-urls', 'photo-urls-batch', 'albums', 'album-by-id', 'health'],
           timestamp: new Date().toISOString()
         });
     }
@@ -655,4 +667,277 @@ function checkEnvironment() {
       primary_caching: hasUpstash ? 'upstash' : hasOptional ? 'other' : 'none'
     }
   };
+}
+
+/**
+ * Handle album requests
+ */
+async function handleAlbums(req, res, eventId, startTime) {
+  if (!eventId) {
+    return res.status(400).json({
+      error: 'Event ID is required',
+      code: 'MISSING_EVENT_ID'
+    });
+  }
+
+  // Rate limiting
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  try {
+    await checkAlbumRateLimit(clientIp, 'load');
+  } catch (rateLimitError) {
+    return res.status(429).json({
+      error: 'Rate limit exceeded',
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: rateLimitError.message
+    });
+  }
+
+  // Get user info
+  let user = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    try {
+      const token = authHeader.replace('Bearer ', '');
+      const { data, error } = await supabase.auth.getUser(token);
+      if (!error && data?.user) {
+        user = data.user;
+      }
+    } catch (authError) {
+      console.log('Auth error in albums endpoint:', authError);
+    }
+  }
+
+  const responseTime = Date.now() - startTime;
+
+  switch (req.method) {
+    case 'GET':
+      const {
+        page = '1',
+        limit = '20',
+        refresh = 'false',
+        include_photos = 'true'
+      } = req.query;
+
+      try {
+        const result = await getEventAlbums(eventId, {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          forceRefresh: refresh === 'true',
+          includePhotos: include_photos === 'true',
+          userId: user?.id
+        });
+
+        return res.status(200).json({
+          ...result,
+          event_id: eventId,
+          request_type: 'event_albums',
+          pagination: {
+            current_page: result.page,
+            total_pages: result.total_pages,
+            has_next: result.has_next,
+            has_previous: result.has_previous,
+            total_albums: result.total_count
+          },
+          performance: { response_time_ms: responseTime }
+        });
+
+      } catch (error) {
+        console.error('Error loading event albums:', error);
+        return res.status(500).json({
+          error: 'Failed to load event albums',
+          code: 'ALBUM_LOAD_ERROR',
+          event_id: eventId,
+          details: error.message,
+          performance: { response_time_ms: responseTime }
+        });
+      }
+
+    case 'POST':
+      // Create new album functionality could go here
+      return res.status(501).json({
+        error: 'Album creation not implemented via cache API',
+        code: 'NOT_IMPLEMENTED'
+      });
+
+    case 'DELETE':
+      // Delete album functionality could go here
+      return res.status(501).json({
+        error: 'Album deletion not implemented via cache API',
+        code: 'NOT_IMPLEMENTED'
+      });
+
+    default:
+      res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
+      return res.status(405).json({ error: 'Method not allowed' });
+  }
+}
+
+/**
+ * Handle album by ID requests
+ */
+async function handleAlbumById(req, res, startTime) {
+  const { albumId } = req.query;
+
+  if (!albumId) {
+    return res.status(400).json({
+      error: 'Album ID is required',
+      code: 'MISSING_ALBUM_ID'
+    });
+  }
+
+  // Rate limiting
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
+  try {
+    await checkAlbumRateLimit(clientIp, 'load');
+  } catch (rateLimitError) {
+    return res.status(429).json({
+      error: 'Rate limit exceeded',
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: rateLimitError.message
+    });
+  }
+
+  // Get user info
+  let user = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader) {
+    try {
+      const token = authHeader.replace('Bearer ', '');
+      const { data, error } = await supabase.auth.getUser(token);
+      if (!error && data?.user) {
+        user = data.user;
+      }
+    } catch (authError) {
+      console.log('Auth error in album-by-id endpoint:', authError);
+    }
+  }
+
+  const responseTime = Date.now() - startTime;
+
+  switch (req.method) {
+    case 'GET':
+      const {
+        refresh = 'false',
+        include_photos = 'true'
+      } = req.query;
+
+      try {
+        const result = await getAlbumById(albumId, {
+          forceRefresh: refresh === 'true',
+          includePhotos: include_photos === 'true',
+          userId: user?.id
+        });
+
+        return res.status(200).json({
+          ...result,
+          album_id: albumId,
+          request_type: 'album_by_id',
+          performance: { response_time_ms: responseTime }
+        });
+
+      } catch (error) {
+        console.error(`Error loading album ${albumId}:`, error);
+        
+        if (error.message.includes('not found')) {
+          return res.status(404).json({
+            error: 'Album not found',
+            code: 'ALBUM_NOT_FOUND',
+            album_id: albumId,
+            performance: { response_time_ms: responseTime }
+          });
+        }
+
+        return res.status(500).json({
+          error: 'Failed to load album',
+          code: 'ALBUM_LOAD_ERROR',
+          album_id: albumId,
+          details: error.message,
+          performance: { response_time_ms: responseTime }
+        });
+      }
+
+    case 'PUT':
+      if (!user) {
+        return res.status(401).json({
+          error: 'Authentication required for album updates',
+          code: 'AUTH_REQUIRED'
+        });
+      }
+
+      try {
+        await checkAlbumRateLimit(clientIp, 'update');
+        
+        const updates = req.body;
+        const result = await updateAlbum(albumId, updates, { userId: user.id });
+
+        return res.status(200).json({
+          ...result,
+          album_id: albumId,
+          request_type: 'album_update',
+          performance: { response_time_ms: responseTime }
+        });
+
+      } catch (rateLimitError) {
+        return res.status(429).json({
+          error: 'Rate limit exceeded for updates',
+          code: 'RATE_LIMIT_EXCEEDED'
+        });
+      } catch (error) {
+        console.error(`Error updating album ${albumId}:`, error);
+        return res.status(500).json({
+          error: 'Failed to update album',
+          code: 'ALBUM_UPDATE_ERROR',
+          album_id: albumId,
+          details: error.message,
+          performance: { response_time_ms: responseTime }
+        });
+      }
+
+    case 'DELETE':
+      if (!user) {
+        return res.status(401).json({
+          error: 'Authentication required for album deletion',
+          code: 'AUTH_REQUIRED'
+        });
+      }
+
+      const { eventId: deleteEventId } = req.query;
+      if (!deleteEventId) {
+        return res.status(400).json({
+          error: 'Event ID is required for album deletion',
+          code: 'MISSING_EVENT_ID'
+        });
+      }
+
+      try {
+        await checkAlbumRateLimit(clientIp, 'update');
+        
+        const result = await deleteAlbum(albumId, deleteEventId, { userId: user.id });
+
+        return res.status(200).json({
+          ...result,
+          request_type: 'album_deletion',
+          performance: { response_time_ms: responseTime }
+        });
+
+      } catch (rateLimitError) {
+        return res.status(429).json({
+          error: 'Rate limit exceeded for deletions',
+          code: 'RATE_LIMIT_EXCEEDED'
+        });
+      } catch (error) {
+        console.error(`Error deleting album ${albumId}:`, error);
+        return res.status(500).json({
+          error: 'Failed to delete album',
+          code: 'ALBUM_DELETE_ERROR',
+          album_id: albumId,
+          details: error.message,
+          performance: { response_time_ms: responseTime }
+        });
+      }
+
+    default:
+      res.setHeader('Allow', ['GET', 'PUT', 'DELETE']);
+      return res.status(405).json({ error: 'Method not allowed' });
+  }
 }
