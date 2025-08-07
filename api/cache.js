@@ -616,13 +616,26 @@ function checkEnvironment() {
     'SUPABASE_SERVICE_KEY'
   ];
 
+  const cachingEnvVars = [
+    'UPSTASH_REDIS_REST_URL',
+    'UPSTASH_REDIS_REST_TOKEN'
+  ];
+
   const optionalEnvVars = [
     'KV_URL',
     'REDIS_URL'
   ];
 
   const missing = requiredEnvVars.filter(varName => !process.env[varName]);
+  const hasUpstash = cachingEnvVars.every(varName => !!process.env[varName]);
   const hasOptional = optionalEnvVars.some(varName => !!process.env[varName]);
+  
+  // Debug environment variables (only log presence, not values for security)
+  console.log('Environment variables check:');
+  console.log('- UPSTASH_REDIS_REST_URL:', !!process.env.UPSTASH_REDIS_REST_URL);
+  console.log('- UPSTASH_REDIS_REST_TOKEN:', !!process.env.UPSTASH_REDIS_REST_TOKEN);
+  console.log('- SUPABASE_URL:', !!process.env.SUPABASE_URL);
+  console.log('- SUPABASE_SERVICE_KEY:', !!process.env.SUPABASE_SERVICE_KEY);
 
   if (missing.length > 0) {
     return {
@@ -637,8 +650,9 @@ function checkEnvironment() {
     message: 'Environment configuration valid',
     details: {
       required_vars: requiredEnvVars.length,
-      optional_vars_available: hasOptional,
-      caching_available: hasOptional
+      upstash_redis_available: hasUpstash,
+      other_caching_available: hasOptional,
+      primary_caching: hasUpstash ? 'upstash' : hasOptional ? 'other' : 'none'
     }
   };
 }
