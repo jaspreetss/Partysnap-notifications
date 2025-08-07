@@ -877,12 +877,17 @@ async function handleAlbumById(req, res, startTime) {
           performance: { response_time_ms: responseTime }
         });
 
-      } catch (rateLimitError) {
-        return res.status(429).json({
-          error: 'Rate limit exceeded for updates',
-          code: 'RATE_LIMIT_EXCEEDED'
-        });
       } catch (error) {
+        // Check if it's a rate limit error
+        if (error.message && error.message.includes('Rate limit exceeded')) {
+          return res.status(429).json({
+            error: 'Rate limit exceeded for updates',
+            code: 'RATE_LIMIT_EXCEEDED',
+            message: error.message
+          });
+        }
+        
+        // Handle other errors
         console.error(`Error updating album ${albumId}:`, error);
         return res.status(500).json({
           error: 'Failed to update album',
@@ -920,12 +925,17 @@ async function handleAlbumById(req, res, startTime) {
           performance: { response_time_ms: responseTime }
         });
 
-      } catch (rateLimitError) {
-        return res.status(429).json({
-          error: 'Rate limit exceeded for deletions',
-          code: 'RATE_LIMIT_EXCEEDED'
-        });
       } catch (error) {
+        // Check if it's a rate limit error
+        if (error.message && error.message.includes('Rate limit exceeded')) {
+          return res.status(429).json({
+            error: 'Rate limit exceeded for deletions',
+            code: 'RATE_LIMIT_EXCEEDED',
+            message: error.message
+          });
+        }
+        
+        // Handle other errors
         console.error(`Error deleting album ${albumId}:`, error);
         return res.status(500).json({
           error: 'Failed to delete album',
