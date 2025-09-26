@@ -25,14 +25,17 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { userId, token, platform, deviceId } = req.body;
+    const { userId, token, expoToken, deviceToken, platform, deviceId, tokenType } = req.body;
 
     // Validate input
-    if (!userId || !token || !platform || !deviceId) {
+    if (!userId || (!token && !expoToken && !deviceToken) || !platform || !deviceId) {
       return res.status(400).json({ 
-        error: 'userId, token, platform, and deviceId are required' 
+        error: 'userId, at least one token (token/expoToken/deviceToken), platform, and deviceId are required' 
       });
     }
+    
+    // Determine which token to use
+    const primaryToken = token || deviceToken || expoToken;
 
     if (!['android', 'ios'].includes(platform)) {
       return res.status(400).json({ 
@@ -41,18 +44,26 @@ export default async function handler(req, res) {
     }
 
     // Validate token with respective service
-    let validation;
+    let validation = { valid: true };
     
     // Check if it's an Expo token first
-    if (token.startsWith('ExponentPushToken')) {
+    if (primaryToken.startsWith('ExponentPushToken')) {
       // Expo tokens are already validated by Expo's service
       // We just do a basic format check
       validation = { valid: true };
       console.log('📱 Expo push token detected, skipping validation');
+    } else if (deviceToken) {
+      // Device tokens are for FCM V1 API
+      console.log(`📱 Device token detected for ${platform}, type: ${tokenType || 'fcm_v1'}`);
+      if (platform === 'android') {
+        validation = await validateFCMToken(deviceToken);
+      } else {
+        validation = await validateAPNSToken(deviceToken);
+      }
     } else if (platform === 'android') {
-      validation = await validateFCMToken(token);
+      validation = await validateFCMToken(primaryToken);
     } else {
-      validation = await validateAPNSToken(token);
+      validation = await validateAPNSToken(primaryToken);
     }
 
     if (!validation.valid) {
@@ -63,8 +74,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // Store token in database
-    const stored = await storePushToken(userId, token, platform, deviceId);
+    // Store token in database with additional metadata
+    const stored = await storePushToken(userId, primaryToken, platform, deviceId, {
+      expoToken,
+      deviceToken,
+      tokenType: tokenType || (deviceToken ? 'fcm_v1' : 'expo')
+    });
 
     if (!stored) {
       return res.status(500).json({
@@ -73,7 +88,13 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log(`✅ Push token registered for user ${userId} on ${platform}`);
+    console.log(`✅ Push token registered for user ${userId} on ${platform} (type: ${tokenType || 'expo'})`);
+    if (deviceToken) {
+      console.log('   Device token available for FCM V1 API');
+    }
+    if (expoToken) {
+      console.log('   Expo token available for fallback');
+    }
 
     return res.status(200).json({
       success: true,
