@@ -42,7 +42,14 @@ export default async function handler(req, res) {
 
     // Validate token with respective service
     let validation;
-    if (platform === 'android') {
+    
+    // Check if it's an Expo token first
+    if (token.startsWith('ExponentPushToken')) {
+      // Expo tokens are already validated by Expo's service
+      // We just do a basic format check
+      validation = { valid: true };
+      console.log('📱 Expo push token detected, skipping validation');
+    } else if (platform === 'android') {
       validation = await validateFCMToken(token);
     } else {
       validation = await validateAPNSToken(token);
