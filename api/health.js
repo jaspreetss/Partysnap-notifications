@@ -1,4 +1,4 @@
-// Simple health check endpoint for testing
+// Combined health check and status endpoint
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
