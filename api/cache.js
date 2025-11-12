@@ -286,7 +286,7 @@ async function handleParticipants(req, res, eventId, startTime) {
 async function handlePhotoUrls(req, res, eventId, startTime) {
   // Input validation
   if (!eventId || typeof eventId !== 'string') {
-    return res.status(400).json({ 
+    return res.status(400).json({
       error: 'Invalid event ID',
       code: 'INVALID_EVENT_ID'
     });
@@ -303,14 +303,25 @@ async function handlePhotoUrls(req, res, eventId, startTime) {
     });
   }
 
-  // Get user info
+  // Get user info with proper Supabase auth verification
   let user = null;
   const authHeader = req.headers.authorization;
   if (authHeader) {
     try {
       const token = authHeader.replace('Bearer ', '');
-      // user = await verifyToken(token);
+
+      // Verify token using Supabase auth
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
+
+      if (authError) {
+        console.warn('Auth token verification failed:', authError.message);
+        // Continue as anonymous
+      } else if (authUser) {
+        user = authUser;
+        console.log(`✅ Authenticated user: ${user.id}`);
+      }
     } catch (authError) {
+      console.warn('Auth error:', authError.message);
       // Continue as anonymous
     }
   }
@@ -320,12 +331,13 @@ async function handlePhotoUrls(req, res, eventId, startTime) {
   // Handle different HTTP methods
   switch (req.method) {
     case 'GET':
-      const { 
-        page = 1, 
-        limit = 50, 
+      const {
+        page = 1,
+        limit = 50,
         refresh = false,
         expires_in = 3600,
-        urls_only = false 
+        urls_only = false,
+        sortBy = 'most_liked'
       } = req.query;
 
       // Validate parameters
@@ -347,12 +359,23 @@ async function handlePhotoUrls(req, res, eventId, startTime) {
         });
       }
 
+      // Validate sortBy parameter
+      const VALID_SORT_MODES = ['most_liked', 'newest'];
+      if (!VALID_SORT_MODES.includes(sortBy)) {
+        return res.status(400).json({
+          error: 'Invalid sortBy parameter',
+          code: 'INVALID_SORT_BY',
+          allowed_values: VALID_SORT_MODES
+        });
+      }
+
       const result = await getEventPhotoUrls(eventId, {
         page: pageNum,
         limit: limitNum,
         forceRefresh: refresh === 'true',
         expiresIn,
-        userId: user?.id
+        userId: user?.id,
+        sortBy
       });
 
       if (urls_only === 'true') {
